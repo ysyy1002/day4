@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How AI Talks</title>
+<link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Jua', 'Malgun Gothic', system-ui, sans-serif; color: #3a2a5a; user-select: none;
+    background: linear-gradient(160deg, #fff3d6 0%, #ffd9ec 48%, #d6e9ff 100%); }
+  canvas#gl { position: fixed; inset: 0; display: block; }
+  #top { position: fixed; left: 0; right: 0; top: 0; display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; pointer-events: none; z-index: 3; }
+  #stepTitle { font-size: clamp(20px, 3.2vw, 34px); padding: 8px 20px; background: rgba(255,255,255,.8); border-radius: 999px; box-shadow: 0 4px 0 rgba(150,100,200,.25); }
+  #stepTitle b { color: #ff6fa5; margin-right: 8px; }
+  .ctl { display: flex; gap: 8px; pointer-events: auto; }
+  .ctl button { font: inherit; font-size: 22px; width: 52px; height: 52px; border: 0; border-radius: 50%; cursor: pointer; background: #fff; box-shadow: 0 4px 0 rgba(150,100,200,.35); transition: transform .1s; }
+  .ctl button:hover { transform: translateY(-2px); } .ctl button:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(150,100,200,.35); }
+  .ctl button.off { opacity: .45; }
+  #dots { position: fixed; top: 74px; left: 0; right: 0; display: flex; gap: 10px; justify-content: center; z-index: 3; }
+  #dots i { width: 14px; height: 14px; border-radius: 50%; background: rgba(120,90,180,.28); cursor: pointer; transition: all .25s; }
+  #dots i.on { background: #ff6fa5; width: 36px; border-radius: 9px; } #dots i.done { background: #8d6bff; }
+  #capWrap { position: fixed; left: 0; right: 0; bottom: 18px; display: flex; justify-content: center; padding: 0 16px; z-index: 3; pointer-events: none; }
+  #cap { max-width: 980px; padding: 16px 28px; background: rgba(255,255,255,.93); border-radius: 28px; font-size: clamp(20px, 2.9vw, 32px); line-height: 1.5; text-align: center; box-shadow: 0 8px 0 rgba(150,100,200,.3), 0 14px 40px rgba(100,60,160,.2); }
+  #cap.pop { animation: pop .45s ease-out; } @keyframes pop { 0% { transform: translateY(16px) scale(.96); opacity: .2; } 100% { transform: none; opacity: 1; } }
+  #cap em { font-style: normal; color: #ff5a93; } #cap strong { color: #6a4cff; font-weight: normal; }
+  #bar { position: fixed; left: 0; top: 0; height: 5px; background: linear-gradient(90deg, #ffb347, #ff6fa5, #8d6bff); z-index: 4; width: 0; }
+  .overlay { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; text-align: center; background: linear-gradient(160deg, rgba(255,243,214,.96), rgba(255,217,236,.96) 50%, rgba(214,233,255,.96)); }
+  .overlay h1 { margin: 0 0 8px; font-size: clamp(40px, 8vw, 86px); line-height: 1.12; color: #6a4cff; text-shadow: 0 5px 0 rgba(255,255,255,.9), 0 8px 0 rgba(150,100,200,.3); }
+  .overlay h1 span { color: #ff6fa5; }
+  .overlay p { margin: 6px 0 22px; font-size: clamp(16px, 2.6vw, 26px); }
+  .overlay .row { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  button.big { font: inherit; font-size: 28px; padding: 16px 46px; border: 0; border-radius: 999px; cursor: pointer; color: #fff; background: linear-gradient(180deg, #ff9ec4, #ff5a93); box-shadow: 0 7px 0 #c93a72, 0 12px 30px rgba(255,90,147,.4); animation: bnc 1.2s infinite; }
+  button.big.alt { background: linear-gradient(180deg, #9d86ff, #6a4cff); box-shadow: 0 7px 0 #4a30c0, 0 12px 30px rgba(106,76,255,.4); animation: none; }
+  button.big:active { transform: translateY(5px); box-shadow: 0 2px 0 #c93a72; }
+  @keyframes bnc { 50% { transform: translateY(-6px); } }
+  #end { display: none; } #back { position: fixed; left: 14px; bottom: 6px; z-index: 11; font-size: 13px; color: #6a4cff; text-decoration: none; opacity: .8; }
+  #note { margin-top: 18px; font-size: 14px; opacity: .65; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="bar"></div>
+<div id="top">
+  <div id="stepTitle"></div>
+  <div class="ctl">
+    <button id="bVoice" title="음성 해설 (V)">🔊</button>
+    <button id="bPrev" title="이전 (←)">⏮</button>
+    <button id="bPlay" title="재생/일시정지 (Space)">⏸</button>
+    <button id="bNext" title="다음 (→)">⏭</button>
+    <button id="bReplay" title="이 장면 다시 (R)">🔁</button>
+  </div>
+</div>
+<div id="dots"></div>
+<div id="capWrap"><div id="cap"></div></div>
+
+<div id="intro" class="overlay">
+  <div>
+    <h1>AI는 어떻게<br><span>말을 할까요?</span></h1>
+    <p>ChatGPT · Gemini · Claude 속 <b>트랜스포머</b> 이야기<br>유치원생도 이해하는 레고 블록 애니메이션 🧸</p>
+    <div class="row"><button class="big" id="startBtn">시작하기 ▶</button></div>
+    <div id="note">🔊 소리를 켜면 목소리로 설명해 줘요 · ← → 키로 넘길 수 있어요</div>
+  </div>
+</div>
+<div id="end" class="overlay">
+  <div>
+    <h1>끝! 🎉<br><span>이제 알겠죠?</span></h1>
+    <p>글을 <b>조각</b>내고 → <b>쳐다보고</b> → <b>생각하고</b> → <b>다음 단어</b>를 맞히기!<br>이걸 계속 반복하는 게 AI가 말하는 방법이에요.</p>
+    <div class="row"><button class="big" id="againBtn">처음부터 다시 🔁</button><button class="big alt" id="closeEnd">장면 더 보기</button></div>
+  </div>
+</div>
+<a id="back" href="index.html">← 돌아가기</a>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+const $ = id => document.getElementById(id);
+const clamp = THREE.MathUtils.clamp, lerp = THREE.MathUtils.lerp;
+const ease = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+const easeBack = t => { t = clamp(t, 0, 1); const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+const ramp = (t, a, b) => clamp((t - a) / (b - a), 0, 1);
+const FONT = "'Jua','Malgun Gothic',sans-serif";
+
+// =====================================================================
+//  렌더러 / 카메라 / 조명
+// =====================================================================
+const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight); renderer.setClearColor(0x000000, 0);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 200);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xffd8ec, 1.7));
+const dl = new THREE.DirectionalLight(0xffffff, 1.6); dl.position.set(-6, 10, 10); scene.add(dl);
+const camPos = new THREE.Vector3(0, 1, 14), camLook = new THREE.Vector3(0, 0, 0), goalPos = new THREE.Vector3(0, 1, 14), goalLook = new THREE.Vector3(0, 0, 0);
+const fitK = () => Math.max(1, 1.6 / camera.aspect);
+function cam(p, l) { goalPos.set(...p); goalLook.set(...l); }
+
+// 배경 방울
+const bub = new THREE.Group(); scene.add(bub);
+for (let i = 0; i < 40; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.15 + Math.random() * 0.4, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(Math.random(), 0.8, 0.8), transparent: true, opacity: 0.35 }));
+  m.position.set((Math.random() - 0.5) * 40, (Math.random() - 0.5) * 20, -8 - Math.random() * 12); m.userData = { s: 0.2 + Math.random() * 0.5, p: Math.random() * 6 }; bub.add(m); }
+
+// =====================================================================
+//  공용 부품: 라벨(스프라이트) / 블록 / 빔 / 색종이
+// =====================================================================
+function canvasTexture(cv) { const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; }
+function makeLabel(text, { h = 0.8, color = '#4a3a7a', bg = null, weight = '800', stroke = null } = {}) {
+  const cv = document.createElement('canvas'), c = cv.getContext('2d'), tex = canvasTexture(cv);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })); sp.renderOrder = 5;
+  const api = { sprite: sp, text,
+    set(t) { if (t === this.text && this.drawn) return; this.text = t; this.drawn = true; draw(t); } };
+  function draw(t) {
+    const fs = 96, pad = bg ? 44 : 14; c.font = `${weight} ${fs}px ${FONT}`; const w = Math.ceil(c.measureText(t).width + pad * 2), hh = fs + pad * 1.5;
+    cv.width = w; cv.height = hh; c.font = `${weight} ${fs}px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    if (bg) { c.fillStyle = bg; c.beginPath(); c.roundRect(4, 4, w - 8, hh - 8, hh / 2.4); c.fill(); }
+    if (stroke) { c.lineWidth = 14; c.strokeStyle = stroke; c.lineJoin = 'round'; c.strokeText(t, w / 2, hh / 2 + 4); }
+    c.fillStyle = color; c.fillText(t, w / 2, hh / 2 + 4); tex.needsUpdate = true; sp.scale.set(h * w / hh, h, 1);
+  }
+  api.set(text); return api;
+}
+function makeBlock(text, color, scale = 1) {
+  const g = new THREE.Group(), len = [...text].length, w = Math.max(1.5, 0.9 + len * 0.62), h = 1.5, d = 0.9;
+  const body = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 4, 0.28), new THREE.MeshStandardMaterial({ color, roughness: 0.45 })); g.add(body);
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 160; const c = cv.getContext('2d'); let fs = 112; c.font = `800 ${fs}px ${FONT}`;
+  while (c.measureText(text).width > 470 && fs > 30) { fs -= 4; c.font = `800 ${fs}px ${FONT}`; }
+  c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round'; c.lineWidth = 14; c.strokeStyle = 'rgba(60,30,90,.45)'; c.strokeText(text, 256, 86); c.fillStyle = '#fff'; c.fillText(text, 256, 86);
+  const ph = Math.min(0.7, w * 0.9 * 160 / 512), pw = ph * 512 / 160;
+  const tp = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), new THREE.MeshBasicMaterial({ map: canvasTexture(cv), transparent: true })); tp.position.set(0, -0.3, d / 2 + 0.01); g.add(tp);
+  const eyes = new THREE.Group(), pupils = []; const ex = Math.min(w * 0.2, 0.55);
+  for (const s of [-1, 1]) {
+    const e = new THREE.Group(); e.position.set(s * ex, 0.42, d / 2 + 0.03);
+    const wh = new THREE.Mesh(new THREE.SphereGeometry(0.19, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffffff })); wh.scale.set(1, 1.1, 0.4); e.add(wh);
+    const pu = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 10), new THREE.MeshBasicMaterial({ color: 0x2a1a3a })); pu.position.z = 0.06; e.add(pu); pupils.push(pu);
+    const hl = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff })); hl.position.set(0.04, 0.05, 0.11); pu.add(hl);
+    eyes.add(e);
+  }
+  const sm = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.028, 8, 16, Math.PI), new THREE.MeshBasicMaterial({ color: 0x2a1a3a })); sm.rotation.z = Math.PI; sm.position.set(0, 0.2, d / 2 + 0.03); eyes.add(sm);
+  for (const s of [-1, 1]) { const bl = new THREE.Mesh(new THREE.CircleGeometry(0.12, 12), new THREE.MeshBasicMaterial({ color: 0xff8fb1, transparent: true, opacity: 0.6 })); bl.position.set(s * (ex + 0.4), 0.22, d / 2 + 0.02); eyes.add(bl); }
+  g.add(eyes); g.scale.setScalar(scale);
+  g.userData = { w, h, body, eyes, pupils, look(dx, dy) { const l = Math.hypot(dx, dy) || 1, k = Math.min(1, l); pupils.forEach(p => p.position.set(dx / l * 0.07 * k, dy / l * 0.07 * k, 0.06)); } };
+  return g;
+}
+function makeBeam(a, b, color, radius, lift) {
+  const mid = a.clone().add(b).multiplyScalar(0.5); mid.y += lift;
+  const curve = new THREE.QuadraticBezierCurve3(a.clone(), mid, b.clone()), geo = new THREE.TubeGeometry(curve, 48, radius, 8, false);
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.92 })), total = geo.index.count, grp = new THREE.Group(); grp.add(mesh);
+  const dots = []; for (let i = 0; i < 4; i++) { const d = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.5 + 0.06, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffffff })); grp.add(d); dots.push(d); }
+  return { group: grp, curve, apex: curve.getPoint(0.5),
+    set(p, time) { geo.setDrawRange(0, Math.floor(total * p / 3) * 3); grp.visible = p > 0.01; dots.forEach((d, i) => { d.visible = p > 0.97; if (p > 0.97) d.position.copy(curve.getPoint((time * 0.5 + i / 4) % 1)); }); } };
+}
+function makeConfetti(g, n = 140) {
+  const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, 0.16, 0.03), new THREE.MeshBasicMaterial({ color: 0xffffff }), n), d = new THREE.Object3D(); g.add(mesh);
+  const P = Array.from({ length: n }, () => ({ life: 0, p: new THREE.Vector3(), v: new THREE.Vector3(), r: 0 })); let head = 0;
+  for (let i = 0; i < n; i++) { mesh.setColorAt(i, new THREE.Color().setHSL(Math.random(), 0.9, 0.62)); d.scale.setScalar(0); d.updateMatrix(); mesh.setMatrixAt(i, d.matrix); }
+  return { burst(pos, k = 50) { for (let i = 0; i < k; i++) { const q = P[head]; head = (head + 1) % n; q.life = 1.6 + Math.random(); q.p.copy(pos); q.v.set((Math.random() - 0.5) * 9, 3 + Math.random() * 6, (Math.random() - 0.5) * 6); q.r = Math.random() * 6; } },
+    update(dt) { P.forEach((q, i) => { if (q.life > 0) { q.life -= dt; q.v.y -= 11 * dt; q.p.addScaledVector(q.v, dt); q.r += dt * 8; d.position.copy(q.p); d.rotation.set(q.r, q.r * 0.7, q.r * 1.3); d.scale.setScalar(Math.min(1, q.life)); } else d.scale.setScalar(0); d.updateMatrix(); mesh.setMatrixAt(i, d.matrix); }); mesh.instanceMatrix.needsUpdate = true; } };
+}
+function disposeGroup(g) { g.traverse(o => { if (o.geometry) o.geometry.dispose(); const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; ms.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); }); }); }
+const W = (x, y, z = 0) => new THREE.Vector3(x, y, z);
+const TOK = [['제주도', 0xffb347, 1523], ['하면', 0x59cf94, 872], ['생각나는', 0x6aa9ff, 30417], ['과일은', 0xff7fae, 9981]];
+
+// =====================================================================
+//  장면 정의 (자막 길이로 타임라인 자동 계산)
+// =====================================================================
+const SCENES = [];
+function addScene(def) {
+  let t = 0; const T = [];
+  for (const c of def.caps) { T.push(t); t += Math.max(5.2, [...c.replace(/<[^>]+>/g, '')].length * 0.17 + 1.4); }
+  SCENES.push({ ...def, T, D: t + 1.5 });
+}
+
+// ---- 1. 글자를 조각으로 자르기 ----
+addScene({
+  title: '글자를 레고 조각으로 자르기', icon: '✂️',
+  caps: ['여기 문장이 하나 있어요. <em>“제주도 하면 생각나는 과일은”</em>',
+    '컴퓨터는 문장을 한꺼번에 읽지 못해요. 그래서 가위로 싹둑싹둑! 작은 <strong>레고 조각</strong>으로 잘라요 ✂️ <em>(이 조각을 ‘토큰’이라고 불러요)</em>',
+    '조각마다 <strong>번호표</strong>를 붙여요. 컴퓨터는 글자보다 숫자를 훨씬 좋아하거든요! 🔢'],
+  build(g, T) {
+    cam([0, 1.5, 13], [0, 0.3, 0]);
+    const cream = new THREE.Color(0xfff6df);
+    const blocks = TOK.map(([t, c]) => { const b = makeBlock(t, c); b.userData.target = new THREE.Color(c); b.userData.body.material.color.copy(cream); b.userData.eyes.scale.setScalar(0.001); g.add(b); return b; });
+    const widths = blocks.map(b => b.userData.w), cuts = [T[1] + 2.2, T[1] + 4.4, T[1] + 6.6];
+    const scis = makeLabel('✂️', { h: 1.9 }); g.add(scis.sprite); scis.sprite.position.set(9, 5, 1);
+    const tags = TOK.map(([, , n]) => { const wrap = new THREE.Group(), l = makeLabel('#' + n, { h: 0.75, bg: '#ffffff', color: '#7a4cff' }); wrap.add(l.sprite); wrap.scale.setScalar(0.001); g.add(wrap); return { wrap, l, n }; });
+    return (t, dt, time) => {
+      const gaps = cuts.map(c => 0.75 * ease(ramp(t, c, c + 0.5)));
+      const total = widths.reduce((a, b) => a + b, 0) + gaps.reduce((a, b) => a + b, 0); let x = -total / 2;
+      blocks.forEach((b, i) => {
+        b.position.x = x + widths[i] / 2; x += widths[i] + (gaps[i] ?? 0);
+        const ci = Math.min(i, 2), k = ramp(t, cuts[ci] + 0.2, cuts[ci] + 0.9), u = b.userData;
+        u.body.material.color.lerpColors(cream, u.target, k); u.eyes.scale.setScalar(Math.max(0.001, easeBack(k)));
+        b.position.y = Math.sin(time * 2.2 + i) * 0.07 * k + (k > 0 && k < 1 ? Math.sin(k * 12) * 0.15 : 0); u.look(Math.sin(time + i), Math.cos(time * 0.7 + i) * 0.4);
+      });
+      let ci = cuts.findIndex(c => t < c + 0.7);
+      if (ci < 0) { scis.sprite.position.x += (10 - scis.sprite.position.x) * Math.min(1, dt * 2); scis.sprite.position.y += (6 - scis.sprite.position.y) * Math.min(1, dt * 2); }
+      else { const bx = blocks[ci].position.x + widths[ci] / 2 + gaps[ci] / 2; scis.sprite.position.x += (bx - scis.sprite.position.x) * Math.min(1, dt * 4); scis.sprite.position.y += (1.9 - scis.sprite.position.y) * Math.min(1, dt * 4); }
+      scis.sprite.material.rotation = ci >= 0 && Math.abs(t - cuts[ci]) < 0.6 ? Math.sin(t * 40) * 0.35 : -0.5;
+      tags.forEach((tg, i) => { const s = T[2] + 0.5 + i * 0.7, k = ramp(t, s, s + 0.5); tg.wrap.scale.setScalar(Math.max(0.001, easeBack(k)));
+        tg.wrap.position.set(blocks[i].position.x, 1.75 + Math.sin(time * 2 + i) * 0.08, 0.5);
+        tg.l.set('#' + Math.floor(tg.n * ease(ramp(t, s, s + 1.3)))); });
+    };
+  }
+});
+
+// ---- 2. 의미 지도 ----
+addScene({
+  title: '뜻이 비슷하면 이웃사촌 (의미 지도)', icon: '🗺️',
+  caps: ['번호표를 받은 단어들이 <strong>‘의미 지도’</strong>에 도착했어요. 처음엔 아무 데나 흩어져 있어요 🌫️',
+    '비슷한 뜻의 단어끼리 이웃이 돼요! <em>과일은 과일 마을, 동물은 동물 마을, 탈것은 탈것 마을</em>에 모여 살아요 🏘️',
+    '우리 문장의 <em>‘과일은’</em>도 과일 마을 근처로 이사 갔어요. 그래서 컴퓨터도 ‘귤’과 ‘한라봉’이 비슷하다는 걸 알아요 <em>(실제로는 숫자 수백~수천 개로 위치를 나타내요)</em>'],
+  build(g, T) {
+    const groups = [
+      { name: '🍊 과일 마을', color: 0xffa13a, c: W(-4.6, 0.8, 0), words: ['귤', '한라봉', '사과', '바나나'] },
+      { name: '🐶 동물 마을', color: 0x4cc98a, c: W(4.6, 1.4, -1), words: ['강아지', '고양이', '토끼', '곰'] },
+      { name: '🚗 탈것 마을', color: 0x5ea8ff, c: W(0.2, -2.4, 1.2), words: ['자동차', '버스', '비행기', '기차'] }];
+    const rnd = (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 2147483647; })(), items = [];
+    groups.forEach((gr, gi) => {
+      const halo = new THREE.Mesh(new THREE.SphereGeometry(2.4, 24, 16), new THREE.MeshBasicMaterial({ color: gr.color, transparent: true, opacity: 0.16, depthWrite: false })); halo.position.copy(gr.c); halo.scale.setScalar(0.001); g.add(halo);
+      const lab = makeLabel(gr.name, { h: 0.85, bg: '#fff', color: '#5a3a8a' }); lab.sprite.position.copy(gr.c).add(W(0, 3.1, 0)); lab.sprite.scale.multiplyScalar(0.001); g.add(lab.sprite); gr.halo = halo; gr.lab = lab; gr.labS = lab.sprite.scale.clone().multiplyScalar(1000);
+      gr.words.forEach((w, wi) => {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.42, 20, 14), new THREE.MeshStandardMaterial({ color: gr.color, roughness: 0.35, emissive: gr.color, emissiveIntensity: 0.15 })), l = makeLabel(w, { h: 0.6, color: '#3a2a6a', stroke: '#fff' }); l.sprite.position.y = 0.85; m.add(l.sprite); g.add(m);
+        const a = wi / 4 * Math.PI * 2 + gi, home = gr.c.clone().add(W(Math.cos(a) * 1.4 * (0.7 + rnd() * 0.5), Math.sin(a) * 1.2 * (0.7 + rnd() * 0.5), (rnd() - 0.5) * 2));
+        const start = W((rnd() - 0.5) * 17, (rnd() - 0.5) * 8, (rnd() - 0.5) * 5); m.position.copy(start); items.push({ m, start, home, delay: rnd() * 1.2, ph: rnd() * 6 });
+      });
+    });
+    const me = new THREE.Mesh(new THREE.SphereGeometry(0.6, 24, 16), new THREE.MeshStandardMaterial({ color: 0xff7fae, emissive: 0xff7fae, emissiveIntensity: 0.4 })), meL = makeLabel('과일은', { h: 0.7, bg: '#ff7fae', color: '#fff' });
+    meL.sprite.position.y = 1.1; me.add(meL.sprite); g.add(me); const meStart = W(-9, -4, 2), meHome = W(-3.2, -0.9, 1.6);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.07, 8, 32), new THREE.MeshBasicMaterial({ color: 0xff7fae })); g.add(ring);
+    return (t, dt, time) => {
+      const a = Math.sin(time * 0.25) * 0.4; goalPos.set(Math.sin(a) * 14, 1.5, Math.cos(a) * 14); goalLook.set(0, 0.3, 0);
+      items.forEach(it => { const k = ease(ramp(t, T[1] + it.delay, T[1] + it.delay + 2.2)); it.m.position.lerpVectors(it.start, it.home, k); it.m.position.y += Math.sin(time * 1.6 + it.ph) * 0.12; it.m.scale.setScalar(1 + (k > 0.98 ? Math.sin(time * 3 + it.ph) * 0.04 : 0)); });
+      groups.forEach(gr => { const k = easeBack(ramp(t, T[1] + 2.8, T[1] + 3.6)); gr.halo.scale.setScalar(Math.max(0.001, k)); gr.lab.sprite.scale.set(gr.labS.x * k + 0.0001, gr.labS.y * k + 0.0001, 1); });
+      const k = ease(ramp(t, T[2], T[2] + 2.6)); me.position.lerpVectors(meStart, meHome, k); me.position.y += Math.sin(time * 2) * 0.1; me.scale.setScalar(0.4 + 0.6 * easeBack(ramp(t, T[2] - 0.5, T[2] + 0.3)));
+      ring.position.copy(me.position); ring.rotation.y = time; ring.scale.setScalar(k > 0.98 ? 1 + Math.sin(time * 6) * 0.1 : 0.001);
+    };
+  }
+});
+
+// ---- 3. 어텐션 ----
+addScene({
+  title: '서로 쳐다보기 (어텐션)', icon: '👀',
+  caps: ['이제 <em>‘과일은’</em> 다음에 어떤 말이 올지 알아내야 해요. 앞에 있는 말들을 둘러볼게요 👀',
+    '<em>‘제주도’</em>를 가장 열심히 쳐다보고 있어요! 이렇게 <strong>누구를 얼마나 중요하게 볼지</strong> 정하는 게 <strong>어텐션(주목)</strong>이에요 ✨',
+    '눈이 여러 개라서 서로 다른 걸 동시에 봐요. <strong>어디? 무엇? 어떻게?</strong> 🌈 <em>(멀티헤드 어텐션)</em>',
+    '트랜스포머의 비밀! <strong>문장 전체를 한꺼번에</strong> 보고, 멀리 떨어진 말과도 바로 연결해요 🚀'],
+  build(g, T) {
+    cam([0, 2.2, 14], [0, 1.4, 0]);
+    const S = 0.82, blocks = TOK.map(([t, c]) => { const b = makeBlock(t, c, S); g.add(b); return b; }), ws = blocks.map(b => b.userData.w * S), gap = 0.7, total = ws.reduce((a, b) => a + b, 0) + gap * 3; let x = -total / 2;
+    blocks.forEach((b, i) => { b.position.set(x + ws[i] / 2, 0, 0); x += ws[i] + gap; }); const top = i => blocks[i].position.clone().add(W(0, 0.75 * S + 0.05, 0.3));
+    const origin = top(3), mkB = (i, col, r, lift) => { const b = makeBeam(origin, top(i), col, r, lift); g.add(b.group); return b; };
+    const wts = [0.6, 0.1, 0.2], p1 = [0, 1, 2].map(i => { const b = mkB(i, 0xffc93c, 0.05 + wts[i] * 0.3, 1.4 + Math.abs(3 - i) * 0.5); const l = makeLabel(Math.round(wts[i] * 100) + '%', { h: 0.62, bg: '#fff', color: '#d9780a' }); l.sprite.position.copy(b.apex).add(W(0, 0.4, 0)); l.sprite.visible = false; g.add(l.sprite); return { b, l }; });
+    const heads = [[0, 0xff7a3a, '👁️ 눈1 · 어디?', 2.4], [2, 0x34c58a, '👁️ 눈2 · 무엇?', 3.4], [1, 0x4a90ff, '👁️ 눈3 · 어떻게?', 4.4]].map(([i, col, txt, lift]) => { const b = mkB(i, col, 0.13, lift), l = makeLabel(txt, { h: 0.6, bg: col, color: '#fff' }); l.sprite.position.copy(b.apex).add(W(0, 0.55, 0)); l.sprite.visible = false; g.add(l.sprite); return { b, l, i }; });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.15, 0.07, 8, 40), new THREE.MeshBasicMaterial({ color: 0xff5a93 })); ring.position.copy(blocks[3].position); g.add(ring);
+    const msg = makeLabel('문장 전체를 한꺼번에!', { h: 0.95, bg: '#6a4cff', color: '#fff' }); msg.sprite.position.set(0, -1.9, 1); msg.sprite.visible = false; g.add(msg.sprite);
+    return (t, dt, time) => {
+      blocks.forEach((b, i) => { b.position.y = Math.sin(time * 2 + i) * 0.06; b.userData.look(Math.sin(time * 0.8 + i), 0.3); });
+      ring.rotation.z = time; ring.scale.setScalar(0.85 + Math.sin(time * 4) * 0.06); ring.position.y = blocks[3].position.y;
+      const tgt = t < T[2] ? 0 : t < T[3] - 0 ? heads[0].i : 0; // 3번째 블록은 목표를 쳐다봄
+      if (t < T[1]) { const sc = Math.floor(time * 1.6) % 3; blocks[3].userData.look(blocks[sc].position.x - blocks[3].position.x, 0.2); } else blocks[3].userData.look(blocks[tgt].position.x - blocks[3].position.x, 0.3);
+      p1.forEach((p, i) => { const s = T[1] + 0.8 + i * 0.5, grow = ease(ramp(t, s, s + 1.2)) * (1 - ease(ramp(t, T[2], T[2] + 0.8))); p.b.set(grow, time); p.l.sprite.visible = t > s + 1.3 && t < T[2] + 0.3; });
+      heads.forEach((h, i) => { const s = T[2] + 0.9 + i * 0.9, grow = ease(ramp(t, s, s + 1.2)); h.b.set(grow, time); h.l.sprite.visible = t > s + 1.2; });
+      msg.sprite.visible = t > T[3] + 0.8; msg.sprite.scale.multiplyScalar(1); msg.sprite.position.y = -1.9 + Math.sin(time * 3) * 0.08;
+    };
+  }
+});
+
+// ---- 4. 층층이 생각하기 ----
+addScene({
+  title: '층층이 깊게 생각하기', icon: '🏢',
+  caps: ['생각은 한 번으로 끝나지 않아요. <strong>층을 하나씩 올라가며</strong> 더 깊이 이해해요 🏢',
+    '1층에서는 단어 뜻, 2층에서는 문장 짜임, 3층에서는 상황 이해… <em>층마다 서로 쳐다보기(어텐션)를 다시 해요</em> 👀',
+    '꼭대기에 오르면 ‘과일은’ 조각이 문장 전체의 뜻을 품은 반짝이는 <strong>생각 구슬</strong>이 돼요 ✨ <em>(실제 모델은 수십 층이나 돼요!)</em>'],
+  build(g, T) {
+    const FY = [-1.6, 1.0, 3.6, 6.2], names = ['1층 · 단어 뜻 알기', '2층 · 문장 짜임 보기', '3층 · 상황 이해하기', '4층 · 정답 후보 떠올리기'], cols = [0xffb347, 0x59cf94, 0x6aa9ff, 0xc08bff];
+    const floors = FY.map((y, i) => { const f = new THREE.Mesh(new RoundedBoxGeometry(12.5, 0.25, 4, 3, 0.1), new THREE.MeshStandardMaterial({ color: cols[i], transparent: true, opacity: 0.55, roughness: 0.3 })); f.position.set(0, y - 0.55, 0); g.add(f);
+      const l = makeLabel(names[i], { h: 0.62, bg: '#fff', color: '#5a3a8a' }); l.sprite.position.set(-7.2 + 2.6, y + 0.35, 2.6); l.sprite.position.x = -5.4; g.add(l.sprite); return { f, l }; });
+    const S = 0.72, xs = [-4.8, -1.5, 1.9, 4.8], toks = TOK.map(([t, c], i) => { const b = makeBlock(t, c, S); b.position.x = xs[i]; g.add(b); return b; });
+    const lineGeo = (y) => { const pts = []; for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) pts.push(W(xs[i], y, 0.5), W(xs[j], y, 0.5)); return new THREE.BufferGeometry().setFromPoints(pts); };
+    const nets = FY.map((y, i) => { const l = new THREE.LineSegments(lineGeo(y + 0.9), new THREE.LineBasicMaterial({ color: cols[i], transparent: true, opacity: 0 })); g.add(l); return l; });
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), new THREE.MeshStandardMaterial({ color: 0xffd23f, emissive: 0xffb300, emissiveIntensity: 0.9, roughness: 0.2 })); orb.position.set(xs[3], FY[3] + 2.4, 0); orb.scale.setScalar(0.001); g.add(orb);
+    const orbL = makeLabel('생각 구슬 ✨', { h: 0.8, bg: '#fff', color: '#d9780a' }); orbL.sprite.visible = false; g.add(orbL.sprite); const conf = makeConfetti(g);
+    let boom = false;
+    return (t, dt, time) => {
+      const rise = ease(ramp(t, T[0] + 1.2, T[2] + 4.0)), baseY = -3.0;
+      toks.forEach((b, i) => { const y = lerp(baseY, FY[3] + 0.4, rise) + Math.sin(time * 2 + i) * 0.05; b.position.y = y; b.userData.look(0, 1); });
+      const y0 = lerp(baseY, FY[3] + 0.4, rise);
+      nets.forEach((n, i) => { const near = 1 - clamp(Math.abs(y0 - (FY[i] + 0.4)) / 1.2, 0, 1); n.material.opacity = near * 0.9; });
+      floors.forEach((f, i) => { const near = 1 - clamp(Math.abs(y0 - (FY[i] + 0.4)) / 1.2, 0, 1); f.f.material.opacity = 0.45 + near * 0.4; f.f.scale.y = 1 + near * 0.8; f.l.sprite.position.y = FY[i] + 0.55 + near * 0.15; });
+      toks.forEach((b, i) => { b.userData.body.material.emissive = b.userData.body.material.emissive || new THREE.Color(); b.userData.body.material.emissive.setHex(0xffe08a); b.userData.body.material.emissiveIntensity = rise * 0.45; });
+      const k = easeBack(ramp(t, T[2] + 4.2, T[2] + 5.2)); orb.scale.setScalar(Math.max(0.001, k) * (0.95 + Math.sin(time * 4) * 0.05)); orb.position.y = FY[3] + 2.1 + Math.sin(time * 2) * 0.15; orb.rotation.y = time;
+      orbL.sprite.visible = k > 0.5; orbL.sprite.position.set(xs[3], orb.position.y + 1.5, 0);
+      if (k > 0.5 && !boom) { boom = true; conf.burst(orb.position, 60); } if (t < T[2] + 4) boom = false; conf.update(dt);
+      const cy = lerp(0.2, 3.6, rise); cam([0, cy + 1.2, 16], [0, cy + 0.9, 0]);
+    };
+  }
+});
+
+// ---- 5. 다음 단어 맞히기 ----
+addScene({
+  title: '다음 단어 맞히기 퀴즈', icon: '🎯',
+  caps: ['이제 퀴즈 시간! ‘과일은’ 다음에 올 말 후보들에게 <strong>점수(확률)</strong>를 줘요 📊',
+    '<em>‘감귤’ 62%!</em> 가장 그럴듯하니까 뽑아요 🎯 <em>(가끔은 다른 후보를 뽑아서 글이 매번 달라져요)</em>',
+    '뽑은 단어를 문장 끝에 붙이고, 또 처음부터 <strong>다음 단어 맞히기</strong>! 이걸 계속 반복해요 🔁',
+    'ChatGPT, Gemini, Claude도 이렇게 <strong>한 조각씩 이어 써서</strong> 긴 글을 만들어요 ✍️'],
+  build(g, T) {
+    cam([0, 0.6, 15], [0, 0.4, 0]);
+    const rounds = [
+      { c: [['감귤', 0.62], ['한라봉', 0.22], ['사과', 0.10], ['바나나', 0.06]], s: T[1] - 2.2, tok: ['감귤', 0xff9f40] },
+      { c: [['이에요', 0.75], ['입니다', 0.15], ['이야', 0.06], ['같아요', 0.04]], s: T[2] - 0.2, tok: ['이에요', 0x4fb8ff] },
+      { c: [['.', 0.85], ['!', 0.10], ['?', 0.03], ['~', 0.02]], s: T[2] + 5.2, tok: ['.', 0xb28cff] }];
+    const SC = 0.5, sent = []; let sx = -9.4; const SY = 4.7;
+    const mk = (t, c) => { const b = makeBlock(t, c, SC); b.visible = false; g.add(b); return b; };
+    TOK.forEach(([t, c]) => { const b = mk(t, c), w = b.userData.w * SC; b.position.set(sx + w / 2, SY, 0); sx += w + 0.18; sent.push({ b, show: 0 }); });
+    rounds.forEach(r => { const b = mk(r.tok[0], r.tok[1]), w = b.userData.w * SC; r.slot = W(sx + w / 2, SY, 0); sx += w + 0.18; r.b = b; });
+    const xs = [-5.4, -1.8, 1.8, 5.4], baseY = -2.4, cols = [0xff9f40, 0x6aa9ff, 0x59cf94, 0xc08bff];
+    const bars = xs.map((x, i) => { const m = new THREE.Mesh(new RoundedBoxGeometry(2.3, 1, 1.4, 3, 0.2), new THREE.MeshStandardMaterial({ color: cols[i], roughness: 0.4 })); m.position.set(x, baseY, 0); m.scale.y = 0.001; g.add(m);
+      const nl = makeLabel('?', { h: 0.78, bg: '#fff', color: '#4a3a7a' }); nl.sprite.position.set(x, baseY - 0.85, 1); g.add(nl.sprite); const pl = makeLabel('0%', { h: 0.8, color: '#6a4cff', stroke: '#fff' }); g.add(pl.sprite); return { m, nl, pl, x }; });
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.8, 24, 16), new THREE.MeshStandardMaterial({ color: 0xffd23f, emissive: 0xffb300, emissiveIntensity: 0.8 })); orb.position.set(0, 3.2, 0); g.add(orb); const orbL = makeLabel('생각 구슬', { h: 0.5, color: '#d9780a', stroke: '#fff' }); orbL.sprite.position.set(0, 4.15, 0); g.add(orbL.sprite);
+    const lines = xs.map(x => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([W(0, 2.5, 0), W(x, baseY + 1, 0)]), new THREE.LineBasicMaterial({ color: 0xffc93c, transparent: true, opacity: 0 })); g.add(l); return l; });
+    const ptr = makeLabel('👇', { h: 1.3 }); ptr.sprite.visible = false; g.add(ptr.sprite); const conf = makeConfetti(g); const burst = [false, false, false]; let lastR = -1;
+    return (t, dt, time) => {
+      orb.position.y = 3.2 + Math.sin(time * 2) * 0.1; orb.scale.setScalar(1 + Math.sin(time * 4) * 0.04);
+      sent.forEach((s, i) => { s.b.visible = true; s.b.position.y = SY + Math.sin(time * 2 + i) * 0.04; });
+      let ri = -1; rounds.forEach((r, i) => { if (t >= r.s - 0.1) ri = i; });
+      const r = rounds[Math.max(0, ri)], u = t - r.s;
+      if (ri !== lastR && ri >= 0) { r.c.forEach(([n], i) => bars[i].nl.set(n)); r.c.forEach(([, p], i) => bars[i].pl.set(Math.round(p * 100) + '%')); lastR = ri; }
+      const grow = ri < 0 ? 0 : ease(ramp(u, 0, 1.0)) * (1 - ease(ramp(u, 4.7, 5.1))); let hopIdx = -1;
+      if (ri >= 0 && u > 1.2 && u < 4.6) hopIdx = u < 2.8 ? 3 - Math.floor((u - 1.2) / 0.4) : 0;
+      bars.forEach((b, i) => { const p = r.c[i][1], hgt = Math.max(0.001, p * 5.6 * grow); b.m.scale.y = hgt; b.m.position.y = baseY + hgt / 2; b.m.scale.x = i === 0 && u > 2.8 && u < 3.8 ? 1 + Math.sin((u - 2.8) * 18) * 0.06 : 1;
+        b.pl.sprite.position.set(b.x, baseY + hgt + 0.7, 1); b.pl.sprite.visible = grow > 0.3; b.nl.sprite.visible = grow > 0.05; b.m.material.emissive.setHex(i === 0 && u > 2.8 && u < 4.4 ? 0xffd23f : 0x000000); b.m.material.emissiveIntensity = 0.7; lines[i].material.opacity = grow * p * 1.1; });
+      ptr.sprite.visible = hopIdx >= 0 && grow > 0.3; if (ptr.sprite.visible) { const b = bars[hopIdx]; ptr.sprite.position.set(b.x, baseY + b.m.scale.y + 2.0 + Math.abs(Math.sin(time * 8)) * 0.25, 1); }
+      rounds.forEach((rr, i) => { const fs = rr.s + 3.4, k = ease(ramp(t, fs, fs + 1.0)); rr.b.visible = t >= fs; if (t >= fs) { const from = W(bars[0].x, baseY + rr.c[0][1] * 5.6 + 0.8, 1); rr.b.position.lerpVectors(from, rr.slot, k); rr.b.position.y += Math.sin(k * Math.PI) * 1.6 + (k >= 1 ? Math.sin(time * 2 + i) * 0.04 : 0); rr.b.scale.setScalar(lerp(0.8, SC, k)); if (k >= 1 && !burst[i]) { burst[i] = true; conf.burst(rr.slot, 24); } if (k < 1) burst[i] = false; } });
+      conf.update(dt);
+    };
+  }
+});
+
+// ---- 6. 학습 ----
+addScene({
+  title: '어떻게 똑똑해졌을까? (학습)', icon: '📚',
+  caps: ['그럼 컴퓨터는 어떻게 똑똑해졌을까요? 바로 <strong>엄청나게 많은 글을 읽으며 연습</strong>했어요 📚',
+    '<em>빈칸 퀴즈</em>를 풀어요: “제주도 하면 ____”. 처음엔 엉뚱하게 ‘사과?’ 하고 틀려요 ❌',
+    '틀리면 머릿속 <strong>손잡이(파라미터)</strong>를 아주 조금 돌려서 고쳐요 🎛️ 정답에 가까워지면 칭찬 ⭐ 그리고 다시 도전!',
+    '이걸 <strong>수십억 번</strong> 반복하면 정답을 척척 맞히는 똑똑한 모델이 돼요! <em>(이 연습을 ‘학습’이라고 해요)</em>'],
+  build(g, T) {
+    cam([0, 1.2, 15], [0, 0.6, 0]); const conf = makeConfetti(g);
+    // 책장
+    const shelf = new THREE.Group(); shelf.position.set(-9.2, 0, 0); g.add(shelf); shelf.add(new THREE.Mesh(new RoundedBoxGeometry(3.4, 6.6, 1.2, 3, 0.1), new THREE.MeshStandardMaterial({ color: 0xc89a6a, roughness: 0.8 })));
+    const bookC = [0xff7fae, 0xffb347, 0x6aa9ff, 0x59cf94, 0xc08bff, 0xffd23f];
+    for (let r = 0; r < 5; r++) for (let c = 0; c < 6; c++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1, 0.8), new THREE.MeshStandardMaterial({ color: bookC[(r * 3 + c) % 6] })); b.position.set(-1.25 + c * 0.5, -2.5 + r * 1.25, 0.45); shelf.add(b); }
+    const flying = Array.from({ length: 8 }, (_, i) => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.12), new THREE.MeshStandardMaterial({ color: bookC[i % 6] })); g.add(m); return { m, ph: i / 8 }; });
+    // 로봇
+    const robot = new THREE.Group(); robot.position.set(-1.4, -0.9, 0); g.add(robot);
+    const bodyM = new THREE.Mesh(new RoundedBoxGeometry(2.3, 2.1, 1.5, 4, 0.3), new THREE.MeshStandardMaterial({ color: 0x8fb0ff, roughness: 0.4 })); robot.add(bodyM);
+    const head = new THREE.Group(); head.position.y = 2.1; robot.add(head); head.add(new THREE.Mesh(new RoundedBoxGeometry(2.5, 1.8, 1.7, 4, 0.4), new THREE.MeshStandardMaterial({ color: 0xc4d4ff, roughness: 0.35 })));
+    const ant = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), new THREE.MeshStandardMaterial({ color: 0xff5a93, emissive: 0xff5a93, emissiveIntensity: 0.7 })); ant.position.y = 1.35; head.add(ant); const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.5), new THREE.MeshStandardMaterial({ color: 0x777 })); stick.position.y = 1.05; head.add(stick);
+    const pup = []; for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffffff })); e.position.set(s * 0.6, 0.15, 0.78); e.scale.z = 0.4; head.add(e); const p = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), new THREE.MeshBasicMaterial({ color: 0x2a1a3a })); p.position.set(0, 0, 0.25); e.add(p); pup.push(p); }
+    const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.05, 8, 20, Math.PI), new THREE.MeshBasicMaterial({ color: 0x2a1a3a })); mouth.position.set(0, -0.38, 0.86); head.add(mouth);
+    for (const s of [-1, 1]) { const a = new THREE.Mesh(new RoundedBoxGeometry(0.5, 1.4, 0.5, 3, 0.15), new THREE.MeshStandardMaterial({ color: 0x8fb0ff })); a.position.set(s * 1.5, 0.1, 0); robot.add(a); }
+    // 칠판
+    const board = new THREE.Mesh(new RoundedBoxGeometry(7.4, 3.2, 0.3, 3, 0.15), new THREE.MeshStandardMaterial({ color: 0x2f6b55, roughness: 0.9 })); board.position.set(5.0, 2.7, -0.5); g.add(board);
+    const bl = makeLabel('제주도 하면 ____', { h: 1.1, color: '#fff' }); bl.sprite.position.set(5.0, 2.8, 0); g.add(bl.sprite);
+    const bubble = makeLabel('사과?', { h: 1.0, bg: '#fff', color: '#5a3a8a' }); bubble.sprite.position.set(-1.4, 4.7, 1); bubble.sprite.visible = false; g.add(bubble.sprite);
+    const mark = makeLabel('❌', { h: 1.8 }); mark.sprite.position.set(1.4, 4.4, 1); mark.sprite.visible = false; g.add(mark.sprite);
+    // 손잡이
+    const knobs = [0, 1, 2].map(i => { const k = new THREE.Group(); k.position.set(2.9 + i * 2.1, -2.7, 0.5); const base = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.8, 0.4, 24), new THREE.MeshStandardMaterial({ color: 0xffd6e8 })); base.rotation.x = Math.PI / 2; k.add(base);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.6, 0.12), new THREE.MeshStandardMaterial({ color: 0xff5a93 })); arm.position.set(0, 0.3, 0.3); const pv = new THREE.Group(); pv.add(arm); k.add(pv); g.add(k); return pv; });
+    const kl = makeLabel('🎛️ 손잡이(파라미터)', { h: 0.62, bg: '#fff', color: '#5a3a8a' }); kl.sprite.position.set(5.0, -1.4, 1); g.add(kl.sprite);
+    // 게이지 & 카운터
+    const gTrack = new THREE.Mesh(new RoundedBoxGeometry(8.2, 0.7, 0.4, 3, 0.2), new THREE.MeshStandardMaterial({ color: 0xffffff })); gTrack.position.set(1.2, -4.5, 0); g.add(gTrack);
+    const gFill = new THREE.Mesh(new RoundedBoxGeometry(1, 0.55, 0.45, 3, 0.15), new THREE.MeshStandardMaterial({ color: 0x59cf94, emissive: 0x59cf94, emissiveIntensity: 0.3 })); g.add(gFill);
+    const gl = makeLabel('정답률 0%', { h: 0.7, color: '#3a8a5a', stroke: '#fff' }); gl.sprite.position.set(-4.2, -4.5, 1); g.add(gl.sprite);
+    const cnt = makeLabel('푼 문제 1개', { h: 0.8, bg: '#fff', color: '#7a4cff' }); cnt.sprite.position.set(-6.4, 5.9, 1); g.add(cnt.sprite);
+    const accKeys = [[0, 0.04], [T[1] + 3.6, 0.06], [T[2] + 2.6, 0.38], [T[2] + 6.2, 0.62], [T[3] + 1, 0.9], [T[3] + 5, 0.99]];
+    const acc = t => { for (let i = 0; i < accKeys.length - 1; i++) if (t < accKeys[i + 1][0]) return lerp(accKeys[i][1], accKeys[i + 1][1], ease(ramp(t, accKeys[i][0], accKeys[i + 1][0]))); return accKeys.at(-1)[1]; };
+    let cheered = false;
+    return (t, dt, time) => {
+      flying.forEach(f => { const p = (time * 0.35 + f.ph) % 1; f.m.position.set(lerp(-9.2, -1.4, p), lerp(0, 1.2, p) + Math.sin(p * Math.PI) * 3, 1.2); f.m.rotation.set(p * 6, p * 4, p * 3); f.m.scale.setScalar(1 - p * 0.6); });
+      const q1 = T[1] + 1.4, x1 = T[1] + 3.2, kn0 = T[2] + 0.5, q2 = T[2] + 2.8, x2 = T[2] + 4.4, q3 = T[2] + 5.4, ok = T[2] + 6.8;
+      let say = null, mood = 'neutral';
+      if (t >= q1 && t < x1 + 1.8) { say = '사과?'; if (t >= x1) mood = 'sad'; }
+      if (t >= q2 && t < x2 + 1.5) { say = '한라봉?'; if (t >= x2) mood = 'meh'; }
+      if (t >= q3) { say = '감귤!'; if (t >= ok) mood = 'happy'; }
+      bubble.sprite.visible = !!say; if (say) bubble.set(say);
+      mark.sprite.visible = (t >= x1 && t < x1 + 1.8) || (t >= x2 && t < x2 + 1.5) || t >= ok; mark.set(t >= ok ? '✅' : t >= x2 && t < x2 + 1.5 ? '🤏' : '❌'); mark.sprite.position.y = 4.4 + Math.sin(time * 5) * 0.08;
+      bl.set(t >= ok ? '제주도 하면 감귤' : '제주도 하면 ____');
+      mouth.rotation.z = mood === 'sad' ? 0 : mood === 'meh' ? Math.PI / 2 : Math.PI; mouth.scale.setScalar(mood === 'happy' ? 1.4 : 1); mouth.position.y = mood === 'sad' ? -0.55 : -0.38;
+      pup.forEach(p => p.position.set(Math.sin(time) * 0.06, mood === 'sad' ? -0.1 : 0.03, 0.25));
+      robot.position.y = -0.9 + (mood === 'happy' ? Math.abs(Math.sin(time * 6)) * 0.5 : Math.sin(time * 2) * 0.05); head.rotation.z = mood === 'sad' ? Math.sin(time * 14) * 0.12 : Math.sin(time * 1.5) * 0.04; ant.material.emissiveIntensity = 0.5 + Math.sin(time * 6) * 0.3;
+      knobs.forEach((k, i) => { const turn = ease(ramp(t, kn0 + i * 0.5, kn0 + i * 0.5 + 1.0)); k.rotation.z = Math.sin(time * 0.5 + i) * 0.05 - turn * (0.6 + i * 0.35) * (t >= q3 ? 1 : 1); });
+      const a = acc(t); gFill.scale.set(Math.max(0.01, a * 8), 1, 1); gFill.position.set(1.2 - 4.0 + a * 4, -4.5, 0.1); gl.set('정답률 ' + Math.round(a * 100) + '%');
+      const n = Math.floor(Math.pow(10, 9.3 * ease(ramp(t, 0, SCENES[5].D * 0.92)))); cnt.set('푼 문제 ' + (n > 99999999 ? Math.round(n / 1e8) / 10 + '억' : n.toLocaleString()) + '개');
+      if (t >= ok && !cheered) { cheered = true; conf.burst(W(-1.4, 3, 1), 80); } conf.update(dt);
+    };
+  }
+});
+
+// ---- 7. 정리 ----
+addScene({
+  title: '한눈에 정리!', icon: '🎉',
+  caps: ['정리해 볼까요? <strong>①조각내고 ②번호 붙이고 ③의미 지도에 놓고 ④서로 쳐다보고 ⑤층층이 생각해서 ⑥다음 단어를 맞혀요!</strong>',
+    '그리고 맞힌 단어를 붙여서 <strong>처음부터 다시</strong>! 이걸 반복하면 글이 한 줄, 두 줄 완성돼요 🔁',
+    '이 구조의 이름이 바로 <strong>트랜스포머</strong>! 쳐다보기(어텐션)가 핵심이에요. ChatGPT, Gemini, Claude 같은 AI 친구들이 이 원리로 만들어졌어요 🤖 <em>(실제로는 훨씬 큰 숫자와 복잡한 계산이지만 아이디어는 똑같아요!)</em>'],
+  build(g, T) {
+    cam([0, 0.6, 15], [0, 0, 0]); const conf = makeConfetti(g, 200);
+    const steps = [['✂️', '조각내기', 0xffb347], ['🔢', '번호 붙이기', 0xff7fae], ['🗺️', '의미 지도', 0x59cf94], ['👀', '쳐다보기', 0x6aa9ff], ['🏢', '층층이 생각', 0xc08bff], ['🎯', '다음 단어', 0xff5a93]];
+    const xs = steps.map((_, i) => -8.3 + i * 3.32), nodes = steps.map(([e, n, c], i) => { const grp = new THREE.Group(); grp.position.set(xs[i], 0.3, 0);
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 0.45, 32), new THREE.MeshStandardMaterial({ color: c, roughness: 0.35 })); disc.rotation.x = Math.PI / 2; grp.add(disc);
+      const el = makeLabel(e, { h: 1.15 }); el.sprite.position.z = 0.5; grp.add(el.sprite); const nl = makeLabel(`${i + 1}. ${n}`, { h: 0.55, bg: '#fff', color: '#5a3a8a' }); nl.sprite.position.set(0, -1.75, 0.3); grp.add(nl.sprite); grp.scale.setScalar(0.001); g.add(grp); return grp; });
+    const arrows = steps.slice(1).map((_, i) => { const m = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.55, 3), new THREE.MeshBasicMaterial({ color: 0x8d6bff })); m.rotation.z = -Math.PI / 2; m.position.set((xs[i] + xs[i + 1]) / 2, 0.3, 0); m.scale.setScalar(0.001); g.add(m); return m; });
+    const loopPts = [W(xs[5], -2.4, 0), W(xs[5] - 1, -4.2, 0), W(0, -4.9, 0), W(xs[0] + 1, -4.2, 0), W(xs[0], -2.4, 0)], loopC = new THREE.CatmullRomCurve3(loopPts), loop = new THREE.Mesh(new THREE.TubeGeometry(loopC, 40, 0.09, 6), new THREE.MeshBasicMaterial({ color: 0xff6fa5 })); loop.visible = false; g.add(loop); const loopL = makeLabel('🔁 반복!', { h: 0.8, bg: '#ff6fa5', color: '#fff' }); loopL.sprite.position.set(0, -4.9, 0.5); loopL.sprite.visible = false; g.add(loopL.sprite);
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.34, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffe14a })); g.add(ball);
+    const names = [['ChatGPT', 0x4fcf9a], ['Gemini', 0x6a8bff], ['Claude', 0xff9a6a]], fam = names.map(([n, c], i) => { const b = makeBlock(n, c, 0.75); b.position.set(-4.6 + i * 4.6, 3.9, 0); b.scale.setScalar(0.001); g.add(b); return b; });
+    const tl = makeLabel('Transformer = 어텐션 + 층층이 생각', { h: 0.9, bg: '#6a4cff', color: '#fff' }); tl.sprite.position.set(0, 2.2, 1); tl.sprite.visible = false; g.add(tl.sprite); let cheered = false;
+    return (t, dt, time) => {
+      nodes.forEach((n, i) => { const s = T[0] + 0.5 + i * 0.5, k = easeBack(ramp(t, s, s + 0.5)); const active = Math.floor(((time * 0.9) % 6)) === i && t > T[0] + 4; n.scale.setScalar(Math.max(0.001, k) * (active ? 1.15 : 1)); n.position.y = 0.3 + (active ? Math.sin(time * 10) * 0.08 : 0); });
+      arrows.forEach((a, i) => a.scale.setScalar(Math.max(0.001, easeBack(ramp(t, T[0] + 0.9 + i * 0.5, T[0] + 1.4 + i * 0.5)))));
+      const bp = (time * 0.9) % 6, bi = Math.floor(bp), bf = bp - bi; ball.visible = t > T[0] + 3.5; if (bi < 5) { ball.position.set(lerp(xs[bi], xs[bi + 1], ease(bf)), 0.3 + Math.sin(bf * Math.PI) * 1.2, 0.8); } else { const c = loopC.getPoint(ease(bf)); ball.position.copy(c); }
+      loop.visible = loopL.sprite.visible = t > T[1]; loopL.sprite.position.y = -4.9 + Math.sin(time * 3) * 0.08;
+      tl.sprite.visible = t > T[2] + 0.5; fam.forEach((b, i) => { const k = easeBack(ramp(t, T[2] + 1.5 + i * 0.5, T[2] + 2.1 + i * 0.5)); b.scale.setScalar(Math.max(0.001, k) * 0.75); b.position.y = 3.9 + Math.sin(time * 2 + i) * 0.12; b.userData.look(Math.sin(time + i), 0.2); });
+      if (t > T[2] + 2.4 && !cheered) { cheered = true; conf.burst(W(-3, 3, 1), 70); conf.burst(W(3, 3, 1), 70); } conf.update(dt);
+    };
+  }
+});
+
+// =====================================================================
+//  재생 컨트롤러
+// =====================================================================
+let cur = -1, stage = null, upd = null, t = 0, playing = false, auto = true, voiceOn = true, capIdx = -1, started = false;
+const dots = $('dots'); SCENES.forEach((s, i) => { const d = document.createElement('i'); d.title = s.title; d.onclick = () => go(i); dots.appendChild(d); });
+function speak(text) {
+  if (!voiceOn || !('speechSynthesis' in window)) return;
+  try { speechSynthesis.cancel(); const clean = text.replace(/<[^>]+>/g, '').replace(/[\p{Extended_Pictographic}️]/gu, '').replace(/ChatGPT/g, '챗지피티').replace(/Gemini/g, '제미나이').replace(/Claude/g, '클로드').replace(/Transformer/g, '트랜스포머').replace(/[“”‘’"']/g, '').replace(/[①②③④⑤⑥]/g, m => '일이삼사오육'['①②③④⑤⑥'.indexOf(m)] + '번 ');
+    const u = new SpeechSynthesisUtterance(clean); u.lang = 'ko-KR'; u.rate = 1.0; u.pitch = 1.2; const v = speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith('ko')); if (v) u.voice = v; speechSynthesis.speak(u); } catch {}
+}
+function go(i, at = 0) {
+  i = clamp(i, 0, SCENES.length - 1); if (stage) { scene.remove(stage); disposeGroup(stage); }
+  cur = i; t = at; capIdx = -1; stage = new THREE.Group(); scene.add(stage); upd = SCENES[i].build(stage, SCENES[i].T);
+  $('stepTitle').innerHTML = `<b>${i + 1}/${SCENES.length}</b>${SCENES[i].icon} ${SCENES[i].title}`;
+  [...dots.children].forEach((d, k) => { d.className = k === i ? 'on' : k < i ? 'done' : ''; });
+  $('end').style.display = 'none';
+}
+function setCaption(k) { const el = $('cap'); el.innerHTML = SCENES[cur].caps[k]; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); speak(SCENES[cur].caps[k]); }
+function setPlaying(p) { playing = p; $('bPlay').textContent = p ? '⏸' : '▶️'; if (!p) try { speechSynthesis.pause(); } catch {} else try { speechSynthesis.resume(); } catch {} }
+const next = () => { if (cur < SCENES.length - 1) go(cur + 1); else { $('end').style.display = 'grid'; try { speechSynthesis.cancel(); } catch {} } };
+$('startBtn').onclick = () => { $('intro').style.display = 'none'; started = true; go(0); setPlaying(true); };
+$('bPlay').onclick = () => setPlaying(!playing); $('bNext').onclick = () => { go(cur + 1 > SCENES.length - 1 ? cur : cur + 1); setPlaying(true); }; $('bPrev').onclick = () => { go(cur - 1); setPlaying(true); };
+$('bReplay').onclick = () => { go(cur); setPlaying(true); };
+$('bVoice').onclick = () => { voiceOn = !voiceOn; $('bVoice').classList.toggle('off', !voiceOn); $('bVoice').textContent = voiceOn ? '🔊' : '🔇'; if (!voiceOn) try { speechSynthesis.cancel(); } catch {} else setCaption(Math.max(0, capIdx)); };
+$('againBtn').onclick = () => { go(0); setPlaying(true); }; $('closeEnd').onclick = () => { $('end').style.display = 'none'; };
+addEventListener('keydown', e => {
+  if (!started) { if (e.code === 'Enter' || e.code === 'Space') $('startBtn').click(); return; }
+  if (e.code === 'ArrowRight') $('bNext').click(); if (e.code === 'ArrowLeft') $('bPrev').click(); if (e.code === 'Space') { e.preventDefault(); setPlaying(!playing); } if (e.code === 'KeyR') $('bReplay').click(); if (e.code === 'KeyV') $('bVoice').click();
+});
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+window.__T = { camera, get stage() { return stage; }, go, setT: v => { t = v; }, get t() { return t; }, pause: () => setPlaying(false), SCENES };
+
+go(0); $('cap').innerHTML = '';
+const clock = new THREE.Clock(), cd = { last: 0 };
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05), time = clock.elapsedTime;
+  if (started && playing) t += dt;
+  const sc = SCENES[cur];
+  if (started) {
+    let k = 0; sc.T.forEach((s, i) => { if (t >= s) k = i; }); if (k !== capIdx) { capIdx = k; setCaption(k); }
+    if (playing && t >= sc.D && auto) next();
+    $('bar').style.width = ((cur + Math.min(1, t / sc.D)) / SCENES.length * 100) + '%';
+  }
+  upd(t, started && playing ? dt : dt * 0.0001, time);
+  bub.children.forEach(b => { b.position.y += Math.sin(time * b.userData.s + b.userData.p) * 0.003; b.position.x += Math.cos(time * b.userData.s * 0.7 + b.userData.p) * 0.002; });
+  const k = fitK(); const gp = goalLook.clone().add(goalPos.clone().sub(goalLook).multiplyScalar(k));
+  camPos.lerp(gp, 1 - Math.exp(-dt * 3)); camLook.lerp(goalLook, 1 - Math.exp(-dt * 3)); camera.position.copy(camPos); camera.lookAt(camLook);
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
